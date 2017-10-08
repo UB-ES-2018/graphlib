@@ -57,110 +57,78 @@ class Graph:
                     edges_list.append((n1,n2))
         return edges_list
     
-    def add_node(self, node, attr_dict=None):
-        
-        if attr_dict is None:
-            node_dict = {}
-        else:
-            #Tenemos que crear una copia del diccionario, porque si no utilitzamos el método add_nodes_from, estaremos
-            #asignando un mismo diccionario de atributos a múltiples nodos (y si modificamos los atributos de un nodo,
-            #modificaremos también los demás nodos).
-            node_dict = attr_dict.copy()
-            
-        if node in self._nodes:
-            if attr_dict:
-                self._nodes[node].update(node_dict)    
-        else:
-            self._nodes[node] = node_dict
-            self._edges[node] = {} #Añadimos el nodo al diccionario de aristas, aunque su grado sea 0, así podremos
-                                   #utilizar métodos como degree(node) o neighbors(node).
+    # Método para añadir nodo, si existe el nodo, simplemente se actualizará, siempre se actualiza
+    # con attr_dict, pero si el nodo no existe, entonces crea un diccionario nuevo y entonces actualiza
+    def add_node(self, node, attr_dict={}):
+        if node not in self._nodes: self._nodes[node]={}
+        self._nodes[node].update(attr_dict)
 
     
-    #Comprovamos si los dos nodos existe, si no existe alguno, lo creamos y después creamos la arista.
-    def add_edge(self, node1, node2, attr_dict=None):
+    # Método para añadir arista, si cualquiera de los nodos pasados por parámetro no existe,
+    # entonces se llama la función add_node() ya que controlando los nodos por separado, se
+    # comprobarán los nodos igualmente. Si la arista no existe se crea y luego se actualiza
+    def add_edge(self, node1, node2, attr_dict={}):
+        self.add_node(node1)
+        self.add_node(node2)
         
-        if attr_dict is None:
-            edge_dict = {}
-        else:
-            #Tenemos que crear una copia del diccionario, porque si no utilitzamos el método add_edges_from, estaremos
-            #asignando un mismo diccionario de atributos a múltiples aristas (y si modificamos los atributos de una arista,
-            #modificaremos también las demás aristas).
-            edge_dict = attr_dict.copy()
-        if not node1 in self.nodes():
-            self.add_node(node1)
-        if not node2 in self.nodes():
-            self.add_node(node2)
+        if node1 not in self._edges: self._edges[node1]={node2:attr_dict}
+        if node2 not in self._edges: self._edges[node2]={node1:attr_dict}
             
-        #Añadimos para una arista que va del nodo A al B, la arista que va de A a B y la arista que va de B a A.
-        for n1,n2 in [(node1,node2),(node2,node1)]:
+        if node1 not in self._edges[node2]: self._edges[node2][node1]=attr_dict
+        else: self._edges[node2][node1].update(attr_dict)
             
-            if self._edges[n1] != {}:
-                if n2 in self._edges[n1] and edge_dict:
-                    self._edges[n1][n2].update(edge_dict)
-                else:
-                    self._edges[n1][n2] = edge_dict
-            else:
-                self._edges[n1].update({n2 : edge_dict})
+        if node2 not in self._edges[node1]: self._edges[node1][node2]=attr_dict
+        else: self._edges[node1][node2].update(attr_dict)
             
                 
         
     def add_nodes_from(self, node_list, attr_dict=None):
-        for new_node in node_list:
-            self.add_node(new_node,attr_dict)
+        for new_node in node_list: self.add_node(new_node,attr_dict)
     
     def add_edges_from(self, edge_list, attr_dict=None):
-        for new_edge in edge_list:
-            self.add_edge(new_edge[0],new_edge[1],attr_dict)
+        for new_edge in edge_list: self.add_edge(new_edge[0],new_edge[1],attr_dict)
 
-    def degree(self,node):
-        if node in self._edges:
-            return len(self._edges[node])
-        else:
-            raise ValueError("El nodo " + str(node) + " no existe")
+    # Método para medir el grado de un nodo, puede no existir en las aristas, porque puede
+    # ser un grafo no conexo, retorna error en caso de no existir el nodo
+    def degree(self, node):
+        if node in self._edges: return len(self._edges[node])
+        if node in self._nodes: return 0
+        raise ValueError("Node does'nt exists")
     
+    # Método para retornar los nodos adyacentes al nodo parámetro, retorna error en caso de no
+    # existir, o vacío en caso de no estar conectado
     def __getitem__(self, node):
-        if node in self._edges:
-            return self._edges[node]
-        else:
-            raise ValueError("El nodo " + str(node) + " no existe")
+        if node in self._edges: return self._edges[node]
+        if node in self._nodes: return {}
+        raise ValueError("Node does'nt exists")
     
     def __len__(self):
         return len(self._nodes)
     
+    # Método para devolver los nodos vecinos, reutilizando el error del método __getitem__
     def neighbors(self, node):
-        if node in self._edges:
-            return list(self._edges[node].keys())
-        else:
-            raise ValueError("El nodo " + str(node) + " no existe")
+        return [n for n in self[node]]
     
+    #  Método para eliminar nodos y aristas o retornamos error si no existe
     def remove_node(self, node1):
-        if not node1 in self._nodes:
-            raise ValueError("El nodo " + str(node1) + " no existe")
-        
-        
-        #Primero eliminamos el nodo del conjunto de nodos
+        if node1 not in self._nodes: raise ValueError("Node does'nt exists")
+        if node1 in self._edges: del self._edges[node1]
         del self._nodes[node1]
-        
-        #Y ahora eliminamos todas sus aristas incidentes
-        if node1 in self._edges:
-            edges_list_to_remove = [node2 for node2 in self._edges[node1].keys()]
-            del self._edges[node1]
-            for node in edges_list_to_remove:
-                del self._edges[node][node1]
+        for n in self._edges:
+            if node1 in self._edges[n]: del self._edges[n][node1]
                 
                 
     
+    # Método para eliminar arista, si no existen en el diccionario de aristas, tampoco en
+    # en el diccionario de nodos, ya que se va controlando al añadir nodos o aristas, si no
+    # están conectados, intenta remover igualmente, aunque no exista arista
     def remove_edge(self, node1, node2):
-        if not node1 in self._edges:
-            raise ValueError("El nodo " + str(node1) + " no existe")
-        if not node2 in self._edges:
-            raise ValueError("El nodo " + str(node2) + " no existe")
-        if not node2 in self._edges[node1]:
-            raise ValueError("El nodo " + str(node1) + " no está conectado con el nodo " + str(node2))
-        
-        #Eliminamos tanto la arista (node1,node2) como la arista (node2,node1)
-        for n1,n2 in [(node1,node2),(node2,node1)]:
-            del self._edges[n1][n2]
+        if node1 not in self._nodes or node2 not in self._nodes: raise ValueError("Node does'nt exists")
+        if node1==node2: raise ValueError("Same node")
+        if node1 in self._edges and node2 in self._edges:
+            if node1 in self._edges[node2]:
+                del self._edges[node1][node2]
+                del self._edges[node2][node1]
     
     def remove_nodes_from(self, node_list):
         for node in node_list:
